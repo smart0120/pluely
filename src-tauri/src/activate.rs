@@ -310,11 +310,30 @@ pub async fn deactivate_license_api(app: AppHandle) -> Result<ActivationResponse
 
 #[tauri::command]
 pub async fn validate_license_api(app: AppHandle) -> Result<ValidateResponse, String> {
+    // When no license key is stored, treat as active (no key required)
+    let creds_result = get_stored_credentials(&app).await;
+    let (license_key, instance_id, _) = match creds_result {
+        Err(_) => {
+            return Ok(ValidateResponse {
+                is_active: true,
+                last_validated_at: None,
+                is_dev_license: true,
+            });
+        }
+        Ok(tuple) => tuple,
+    };
+    if license_key.is_empty() || instance_id.is_empty() {
+        return Ok(ValidateResponse {
+            is_active: true,
+            last_validated_at: None,
+            is_dev_license: true,
+        });
+    }
+
     // Get payment endpoint and API access key from environment
     let payment_endpoint = get_payment_endpoint()?;
     let api_access_key = get_api_access_key()?;
     let machine_id: String = app.machine_uid().get_machine_uid().unwrap().id.unwrap();
-    let (license_key, instance_id, _) = get_stored_credentials(&app).await?;
     let app_version: String = env!("CARGO_PKG_VERSION").to_string();
     let validate_request = ActivationRequest {
         license_key: license_key.clone(),
@@ -322,14 +341,6 @@ pub async fn validate_license_api(app: AppHandle) -> Result<ValidateResponse, St
         machine_id: machine_id.clone(),
         app_version: app_version.clone(),
     };
-
-    if license_key.is_empty() || instance_id.is_empty() {
-        return Ok(ValidateResponse {
-            is_active: false,
-            last_validated_at: None,
-            is_dev_license: false,
-        });
-    }
 
     // Make HTTP request to validate endpoint with authorization header
     let client = reqwest::Client::new();
