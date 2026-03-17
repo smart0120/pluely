@@ -970,7 +970,6 @@ pub async fn fetch_prompts() -> Result<PluelyPromptsResponse, String> {
     let response = client
         .post(&url)
         .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", api_access_key))
         .send()
         .await
         .map_err(|e| {
@@ -1033,7 +1032,6 @@ pub async fn create_system_prompt(
     let response = client
         .post(&url)
         .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", api_access_key))
         .header("license_key", &license_key)
         .header("instance", &instance_id)
         .header("machine_id", &machine_id)
