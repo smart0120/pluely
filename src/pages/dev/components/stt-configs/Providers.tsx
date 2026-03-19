@@ -9,6 +9,7 @@ export const Providers = ({
   selectedSttProvider,
   onSetSelectedSttProvider,
   sttVariables,
+  bundledOpenAiFromBuild,
 }: UseSettingsReturn) => {
   const [localSelectedProvider, setLocalSelectedProvider] =
     useState<ResultJSON | null>(null);
@@ -36,6 +37,7 @@ export const Providers = ({
   };
 
   const isApiKeyEmpty = () => {
+    if (bundledOpenAiFromBuild) return false;
     return !getApiKeyValue().trim();
   };
 
@@ -79,13 +81,17 @@ export const Providers = ({
         <div className="space-y-2">
           <Header
             title="API Key"
-            description={`Enter your ${
-              allSttProviders?.find(
-                (p) => p?.id === selectedSttProvider?.provider
-              )?.isCustom
-                ? "Custom Provider"
-                : selectedSttProvider?.provider
-            } API key to authenticate and access STT models. Your key is stored locally and never shared.`}
+            description={
+              bundledOpenAiFromBuild
+                ? "This build uses the same OpenAI API key embedded at compile time for Whisper. It is not shown here and is not saved to local storage."
+                : `Enter your ${
+                    allSttProviders?.find(
+                      (p) => p?.id === selectedSttProvider?.provider
+                    )?.isCustom
+                      ? "Custom Provider"
+                      : selectedSttProvider?.provider
+                  } API key to authenticate and access STT models. Your key is stored locally and never shared.`
+            }
           />
 
           <div className="space-y-2">
@@ -93,8 +99,11 @@ export const Providers = ({
               <Input
                 type="password"
                 placeholder="**********"
-                value={getApiKeyValue()}
+                value={
+                  bundledOpenAiFromBuild ? "••••••••" : getApiKeyValue()
+                }
                 onChange={(value) => {
+                  if (bundledOpenAiFromBuild) return;
                   const apiKeyVar = findKeyAndValue("api_key");
                   if (!apiKeyVar || !selectedSttProvider) return;
 
@@ -108,6 +117,7 @@ export const Providers = ({
                   });
                 }}
                 onKeyDown={(e) => {
+                  if (bundledOpenAiFromBuild) return;
                   const apiKeyVar = findKeyAndValue("api_key");
                   if (!apiKeyVar || !selectedSttProvider) return;
 
@@ -119,10 +129,11 @@ export const Providers = ({
                     },
                   });
                 }}
+                readOnly={bundledOpenAiFromBuild}
                 disabled={false}
                 className="flex-1 h-11 border-1 border-input/50 focus:border-primary/50 transition-colors"
               />
-              {isApiKeyEmpty() ? (
+              {!bundledOpenAiFromBuild && isApiKeyEmpty() ? (
                 <Button
                   onClick={() => {
                     const apiKeyVar = findKeyAndValue("api_key");
@@ -144,7 +155,7 @@ export const Providers = ({
                 >
                   <KeyIcon className="h-4 w-4" />
                 </Button>
-              ) : (
+              ) : !bundledOpenAiFromBuild ? (
                 <Button
                   onClick={() => {
                     const apiKeyVar = findKeyAndValue("api_key");
@@ -165,7 +176,7 @@ export const Providers = ({
                 >
                   <TrashIcon className="h-4 w-4" />
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

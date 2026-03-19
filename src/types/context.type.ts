@@ -58,4 +58,6 @@ export type IContextType = {
   setCursorType: (type: CursorType) => void;
   supportsImages: boolean;
   setSupportsImages: (value: boolean) => void;
+  /** OpenAI key was embedded at build time; Dev Space hides the key and it is not saved to localStorage */
+  bundledOpenAiFromBuild: boolean;
 };

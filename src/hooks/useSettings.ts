@@ -18,6 +18,7 @@ export const useSettings = () => {
     onSetSelectedAIProvider,
     onSetSelectedSttProvider,
     hasActiveLicense,
+    bundledOpenAiFromBuild,
   } = useApp();
   const [variables, setVariables] = useState<{ key: string; value: string }[]>(
     []
@@ -112,5 +113,6 @@ export const useSettings = () => {
     variables,
     sttVariables,
     hasActiveLicense,
+    bundledOpenAiFromBuild,
   };
 };

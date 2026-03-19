@@ -28,6 +28,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -132,6 +133,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     DEFAULT_CUSTOMIZABLE_STATE
   );
   const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(false);
+
+  /** OpenAI key embedded at compile time (see src-tauri/build.rs + OPENAI_API_KEY) */
+  const [bundledOpenAiFromBuild, setBundledOpenAiFromBuild] =
+    useState<boolean>(false);
+  const bundledApiKeyRef = useRef<string | null>(null);
   const [supportsImages, setSupportsImagesState] = useState<boolean>(() => {
     const stored = safeLocalStorage.getItem(STORAGE_KEYS.SUPPORTS_IMAGES);
     return stored === null ? true : stored === "true";
@@ -332,6 +338,53 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       // Load license and data
       await getActiveLicenseStatus();
 
+      // Compile-time OpenAI key + defaults (see src-tauri/build.rs, OPENAI_API_KEY)
+      try {
+        const bundled = await invoke<{
+          enabled: boolean;
+          apiKey?: string;
+          api_key?: string;
+          chatModel?: string;
+          chat_model?: string;
+          whisperModel?: string;
+          whisper_model?: string;
+        }>("get_bundled_openai_config");
+        const apiKey =
+          bundled?.apiKey?.trim() || bundled?.api_key?.trim() || "";
+        const chatModel =
+          bundled?.chatModel?.trim() || bundled?.chat_model?.trim() || "";
+        const whisperModel =
+          bundled?.whisperModel?.trim() || bundled?.whisper_model?.trim() || "";
+        if (
+          bundled?.enabled &&
+          apiKey &&
+          AI_PROVIDERS.some((p) => p.id === "openai") &&
+          SPEECH_TO_TEXT_PROVIDERS.some((p) => p.id === "openai-whisper")
+        ) {
+          const k = apiKey;
+          bundledApiKeyRef.current = k;
+          setBundledOpenAiFromBuild(true);
+          setPluelyApiEnabledState(false);
+          safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, "false");
+          setSelectedAIProvider({
+            provider: "openai",
+            variables: {
+              api_key: k,
+              model: chatModel || "gpt-5.3-chat-latest",
+            },
+          });
+          setSelectedSttProvider({
+            provider: "openai-whisper",
+            variables: {
+              api_key: k,
+              model: whisperModel || "whisper-1",
+            },
+          });
+        }
+      } catch {
+        // Command missing in web-only dev; ignore
+      }
+
       // Track app start
       try {
         const appVersion = await invoke<string>("get_app_version");
@@ -488,25 +541,45 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     checkImageSupport();
   }, [pluelyApiEnabled, selectedAIProvider.provider]);
 
-  // Sync selected AI to localStorage
+  // Sync selected AI to localStorage (never persist bundled API key)
   useEffect(() => {
     if (selectedAIProvider.provider) {
+      const toStore =
+        bundledOpenAiFromBuild && selectedAIProvider.variables?.api_key
+          ? {
+              ...selectedAIProvider,
+              variables: {
+                ...selectedAIProvider.variables,
+                api_key: "",
+              },
+            }
+          : selectedAIProvider;
       safeLocalStorage.setItem(
         STORAGE_KEYS.SELECTED_AI_PROVIDER,
-        JSON.stringify(selectedAIProvider)
+        JSON.stringify(toStore)
       );
     }
-  }, [selectedAIProvider]);
+  }, [selectedAIProvider, bundledOpenAiFromBuild]);
 
-  // Sync selected STT to localStorage
+  // Sync selected STT to localStorage (never persist bundled API key)
   useEffect(() => {
     if (selectedSttProvider.provider) {
+      const toStore =
+        bundledOpenAiFromBuild && selectedSttProvider.variables?.api_key
+          ? {
+              ...selectedSttProvider,
+              variables: {
+                ...selectedSttProvider.variables,
+                api_key: "",
+              },
+            }
+          : selectedSttProvider;
       safeLocalStorage.setItem(
         STORAGE_KEYS.SELECTED_STT_PROVIDER,
-        JSON.stringify(selectedSttProvider)
+        JSON.stringify(toStore)
       );
     }
-  }, [selectedSttProvider]);
+  }, [selectedSttProvider, bundledOpenAiFromBuild]);
 
   // Computed all AI providers
   const allAiProviders: TYPE_PROVIDER[] = [
@@ -544,11 +617,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    setSelectedAIProvider((prev) => ({
-      ...prev,
-      provider,
-      variables,
-    }));
+    setSelectedAIProvider((prev) => {
+      let nextVars = variables;
+      if (
+        bundledOpenAiFromBuild &&
+        provider === "openai" &&
+        (!variables.api_key?.trim?.() || variables.api_key === "")
+      ) {
+        const k =
+          prev.variables?.api_key?.trim() || bundledApiKeyRef.current || "";
+        if (k) nextVars = { ...variables, api_key: k };
+      }
+      return {
+        ...prev,
+        provider,
+        variables: nextVars,
+      };
+    });
   };
 
   // Setter for selected STT with validation
@@ -564,7 +649,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    setSelectedSttProvider((prev) => ({ ...prev, provider, variables }));
+    setSelectedSttProvider((prev) => {
+      let nextVars = variables;
+      if (
+        bundledOpenAiFromBuild &&
+        provider === "openai-whisper" &&
+        (!variables.api_key?.trim?.() || variables.api_key === "")
+      ) {
+        const k =
+          prev.variables?.api_key?.trim() || bundledApiKeyRef.current || "";
+        if (k) nextVars = { ...variables, api_key: k };
+      }
+      return { ...prev, provider, variables: nextVars };
+    });
   };
 
   // Toggle handlers
@@ -681,6 +778,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setCursorType,
     supportsImages,
     setSupportsImages,
+    bundledOpenAiFromBuild,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

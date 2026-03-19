@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod activate;
 mod api;
+mod bundled_openai;
 mod capture;
 mod db;
 mod shortcuts;
@@ -73,6 +74,7 @@ pub fn run() {
     let mut builder = builder
         .invoke_handler(tauri::generate_handler![
             get_app_version,
+            bundled_openai::get_bundled_openai_config,
             window::set_window_height,
             window::open_dashboard,
             window::toggle_dashboard,

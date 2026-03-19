@@ -1,5 +1,26 @@
 fn main() {
+    // Load .env from the crate directory (src-tauri) so it works when building from repo root
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let env_path = std::path::PathBuf::from(&manifest_dir).join(".env");
+    dotenv::from_path(&env_path).ok();
     dotenv::dotenv().ok();
+
+    // Optional: embed OpenAI key for production builds (never echo the value)
+    if let Ok(k) = std::env::var("OPENAI_API_KEY") {
+        if !k.trim().is_empty() {
+            println!("cargo:rustc-env=BUNDLED_OPENAI_API_KEY={}", k);
+        }
+    }
+    if let Ok(m) = std::env::var("OPENAI_CHAT_MODEL") {
+        if !m.trim().is_empty() {
+            println!("cargo:rustc-env=BUNDLED_OPENAI_CHAT_MODEL={}", m);
+        }
+    }
+    if let Ok(m) = std::env::var("OPENAI_WHISPER_MODEL") {
+        if !m.trim().is_empty() {
+            println!("cargo:rustc-env=BUNDLED_OPENAI_WHISPER_MODEL={}", m);
+        }
+    }
 
     if let Ok(payment_endpoint) = std::env::var("PAYMENT_ENDPOINT") {
         println!("cargo:rustc-env=PAYMENT_ENDPOINT={}", payment_endpoint);
